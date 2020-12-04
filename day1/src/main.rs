@@ -9,16 +9,15 @@ fn main() {
     // Sort the numbers, so we can binary_search later.
     v.sort();
 
+    // Find the first pair that sums to 2020.
     find_pair(&v[..]);
 }
 
 fn find_pair(v: &[i32]) {
-    for a in v {
-        // Compute b such that a + b == 2020
-        let b = 2020 - a;
-
-        // If b exists then we have our pair.
-        if has_number(v, b) {
+    for i in 1usize..v.len() {
+        let a = v[i - 1];
+        let b = 2020 -a;
+        if has_number(&v[i..], b) {
             println!("{} * {} = {}", a, b, a * b);
             break;
         }
