@@ -15,19 +15,18 @@ fn main() {
 
 fn find_pair(v: &[i32]) {
     for i in 1usize..v.len() {
+
+        // Let a be the value before the slice starting at i.
         let a = v[i - 1];
-        let b = 2020 -a;
-        if has_number(&v[i..], b) {
+
+        // Let b the other member of the pair such that a + b == 2020.
+        let b = 2020 - a;
+
+        // If be exists then we're done.
+        if let Ok(_i) = v[i..].binary_search(&b) {
             println!("{} * {} = {}", a, b, a * b);
             break;
         }
-    }
-}
-
-fn has_number(v: &[i32], n: i32) -> bool {
-    match v.binary_search(&n) {
-        Ok(_i) => true,
-        Err(_e) => false
     }
 }
 
