@@ -26,17 +26,10 @@ fn find_pair(v: &[i32]) {
 }
 
 fn has_number(v: &[i32], n: i32) -> bool {
-    let mut begin = 0;
-    let mut end = v.len();
-
-    while begin < end {
-        let i = (begin + end) / 2;
-        let mid = v[i];
-        if n < mid { end = i; }
-        else if n > mid { begin = i + 1; }
-        else { return true; }
+    match v.binary_search(&n) {
+        Ok(_i) => true,
+        Err(_e) => false
     }
-    false
 }
 
 fn read_numbers(path: &str) -> Vec::<i32> {
