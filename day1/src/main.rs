@@ -1,27 +1,22 @@
 use std::fs;
 use std::io::{prelude::*, BufReader};
 
-fn main() {
+fn main() -> std::io::Result<()> {
 
     // Read the file into a vector of i32.
-    match read_numbers("day1-input.txt") {
-        Ok(mut v) => {
+    let mut v = read_numbers("day1-input.txt")?;
 
-            // Sort the numbers, so we can binary_search later.
-            v.sort();
+    // Sort the numbers, so we can binary_search later.
+    v.sort_unstable();
 
-            // Find the first pair that sums to 2020.
-            if let Some((a, b)) = find_pair(&v[..]) {
-                println!("{} * {} = {}", a, b, a * b);
-            }
-            else {
-                println!("No pair found that sums to 2020.");
-            }
-        },
-        Err(e) => {
-            println!("Error {} reading input file.", e);
-        }
+    // Find the first pair that sums to 2020.
+    if let Some((a, b)) = find_pair(&v[..]) {
+        println!("{} * {} = {}", a, b, a * b);
     }
+    else {
+        println!("No pair found that sums to 2020.");
+    }
+    Ok(())
 }
 
 fn find_pair(v: &[i32]) -> Option<(i32, i32)> {
@@ -47,22 +42,10 @@ fn find_pair(v: &[i32]) -> Option<(i32, i32)> {
 }
 
 fn read_numbers(path: &str) -> std::io::Result<Vec::<i32>> {
-    match fs::File::open(path) {
-        Ok(file) => {
-            let mut v = Vec::<i32>::new();
-            let reader = BufReader::new(file);
-            for line in reader.lines() {
-                match line {
-                    Ok(s) => {
-                        if let Ok(n) = s.parse::<i32>() { v.push(n); }
-                    },
-                    Err(e) => {
-                        return Err(e)
-                    }
-                }                
-            }
-            Ok(v)
-        },
-        Err(e) => Err(e)
+    let mut v = Vec::<i32>::new();
+    for line in BufReader::new(fs::File::open(path)?).lines() {
+        let s = line?;
+        if let Ok(n) = s.parse::<i32>() { v.push(n); }
     }
+    Ok(v)
 }
