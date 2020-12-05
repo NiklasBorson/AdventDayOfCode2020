@@ -2,16 +2,34 @@ use std::fs;
 use std::io::{prelude::*, BufReader};
 
 fn main() -> std::io::Result<()> {
+
+    // Read the boarding passes.
     let passes = read_boarding_passes("day5-input.txt")?;
 
+    // Iterate over the passes once to determine the max id.
     let mut max_id : u32 = 0;
-
     for pass in &passes {
         let id = pass.get_id();
         if id > max_id { max_id = id; }
     }
-
     println!("max id = {}", max_id);
+
+    // Create a vector of bool to keep track of used seats.
+    let mut used_seats : Vec<bool> = Vec::new();
+    used_seats.resize((max_id + 1) as usize, false);
+    for pass in &passes {
+        used_seats[pass.get_id() as usize] = true;
+    }
+
+    // Find the empty seat using the following criteria.
+    //  - The seat with id is not used
+    //  - The seats in front (id - 1) and behind (id + 1) are used
+    for id in 1..(max_id as usize) {
+        if !used_seats[id] && used_seats[id - 1] && used_seats[id + 1] {
+            println!("My seat is {}", id);
+            break;
+        }
+    }
 
     Ok(())
 }
