@@ -44,28 +44,43 @@ impl Record {
     fn new() -> Record {
         Record{ field_mask : 0 }
     }
-    fn set_field(&mut self, name: &str, _value: &str) {
+
+    fn set_field(&mut self, name: &str, value: &str) {
         match name {
             "byr" => {
-                self.field_mask |= FIELD_BYR;
+                if is_valid_number(value, 1920, 2002) {
+                    self.field_mask |= FIELD_BYR;
+                }
             },
             "iyr" => {
-                self.field_mask |= FIELD_IYR;
+                if is_valid_number(value, 2010, 2020) {
+                    self.field_mask |= FIELD_IYR;
+                }
             },
             "eyr" => {
-                self.field_mask |= FIELD_EYR;
+                if is_valid_number(value, 2020, 2030) {
+                    self.field_mask |= FIELD_EYR;
+                }
             },
             "hgt" => {
-                self.field_mask |= FIELD_HGT;
+                if is_valid_height(value) {
+                    self.field_mask |= FIELD_HGT;
+                }
             },
             "hcl" => {
-                self.field_mask |= FIELD_HCL;
+                if is_valid_hex_color(value) {
+                    self.field_mask |= FIELD_HCL;
+                }
             },
             "ecl" => {
-                self.field_mask |= FIELD_ECL;
+                if is_valid_eye_color(value) {
+                    self.field_mask |= FIELD_ECL;
+                }
             },
             "pid" => {
-                self.field_mask |= FIELD_PID;
+                if is_valid_passport_id(value) {
+                    self.field_mask |= FIELD_PID;
+                }
             },
             "cid" => {
                 self.field_mask |= FIELD_CID;
@@ -74,6 +89,66 @@ impl Record {
                 println!("Warning: unknown field {}", name);
             }
         }
+    }
+}
+
+fn is_valid_number(s: &str, min_value: u32, max_value: u32) -> bool {
+    if let Ok(n) = s.parse::<u32>() {
+        return n >= min_value && n <= max_value;
+    }
+    false
+}
+
+fn is_valid_passport_id(s: &str) -> bool {
+    let mut digits = 0;
+    for ch in s.chars() {
+        if ch >= '0' && ch <= '9' {
+            digits += 1;
+        }
+        else {
+            return false;
+        }
+    }
+    digits == 9
+}
+
+fn is_valid_height(s: &str) -> bool {
+    if s.len() > 2 {
+        let i = s.len() - 2;
+        let units = &s[i..];
+        let value = &s[..i];
+        return match units {
+            "cm" => is_valid_number(value, 150, 193),
+            "in" => is_valid_number(value, 59, 76),
+            _ => false
+        };
+    }
+    false
+}
+
+fn is_hex_digit(ch: char) -> bool {
+    (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')
+}
+
+fn is_valid_hex_color(s: &str) -> bool {
+    if s.len() != 7 { return false; }
+    if &s[..1] != "#" { return false; }
+    for ch in s[1..].chars() {
+        if !is_hex_digit(ch) { return false; }
+    }
+    true
+}
+
+fn is_valid_eye_color(s: &str) -> bool {
+    match s {
+        "amb" => true,
+        "blu" => true,
+        "brn" => true,
+        "gry" => true,
+        "grn" => true,
+        "hzl" => true,
+        "oth" => true,
+        _ => false
     }
 }
 
