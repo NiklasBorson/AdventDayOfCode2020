@@ -4,7 +4,11 @@ use std::io::{prelude::*, BufReader};
 fn main() -> std::io::Result<()> {
     let rules = BagRules::new("day7-input.txt")?;
 
-    println!("{}", rules.count_containing_colors("shiny gold"));
+    println!("Num containing colors for shiny gold: {}", rules.count_containing_colors("shiny gold"));
+
+    if let Some(count) = rules.get_min_children("shiny gold") {
+        println!("Fewest bags within shiny gold: {}", count);
+    }
 
     Ok(())
 }
@@ -15,6 +19,7 @@ struct BagColor {
 }
 
 struct ChildBag {
+    count : u32,
     color_index : u32,
     next_sibling : i32 // -1 if none
 }
@@ -61,10 +66,10 @@ impl BagRules {
                     };
 
                 if let Some((number, color)) = split2(content, " ") {
-                    if let Ok(_n) = number.parse::<u32>() {
+                    if let Ok(n) = number.parse::<u32>() {
                        if let Some(end) = color.find(" bag") {
                             let child_color_index = self.get_color_index(&color[0..end]);
-                            self.add_child_bag(bag_color_index, child_color_index);
+                            self.add_child_bag(bag_color_index, n, child_color_index);
                        } 
                     }
                 }
@@ -93,10 +98,10 @@ impl BagRules {
         }
     }
 
-    fn add_child_bag(&mut self, parent_color_index : u32, child_color_index : u32) {
+    fn add_child_bag(&mut self, parent_color_index : u32, child_count : u32, child_color_index : u32) {
         let mut color = & mut(self.colors[parent_color_index as usize]);
         let new_child_index = self.list_nodes.len() as i32;
-        self.list_nodes.push(ChildBag{ color_index : child_color_index, next_sibling : color.first_child });
+        self.list_nodes.push(ChildBag{ count : child_count, color_index : child_color_index, next_sibling : color.first_child });
         color.first_child = new_child_index;
     }
 
@@ -130,6 +135,58 @@ impl BagRules {
             node_index = child.next_sibling;
         }
         false
+    }
+
+    fn get_min_children(&self, color_name : &str) -> Option<u32> {
+        if let Some(color_index) = self.find_color_index(color_name) {
+            let mut visited = Vec::new();
+            return self.get_min_children2(&mut visited, color_index);
+        }
+        
+        None
+    }
+
+    fn get_min_children2(&self, visited : &mut Vec<u32>, color_index : u32) -> Option<u32> {
+        let bag = &self.colors[color_index as usize];
+        if bag.first_child < 0
+        {
+            return Some(0);
+        }
+
+        visited.push(color_index);
+
+        let mut best = None;
+
+        // Iterate over the possible child bags.
+        let mut node_index = bag.first_child;
+        while node_index >= 0 {
+            let child = &self.list_nodes[node_index as usize];
+
+            // Make sure it's not a cycle.
+            if !visited.contains(&child.color_index) {
+
+                if let Some(count) = self.get_min_children2(visited, child.color_index) {
+                    // The full count is the child bag itself plus the contents of the child bag,
+                    // times the number of child bags.
+                    let full_count = (1 + count) * child.count;
+
+                    if let Some(best_count) = best {
+                        if full_count < best_count {
+                            best = Some(full_count);
+                        }
+                    }
+                    else {
+                        best = Some(full_count);
+                    }
+                }
+            }
+
+            node_index = child.next_sibling;
+        }
+
+        visited.pop();
+
+        best
     }
 }
 
