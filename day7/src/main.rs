@@ -1,14 +1,14 @@
 use std::fs;
 use std::io::{prelude::*, BufReader};
 
+const INFINITE_BAGS : u32 = 0xFFFFFFFF;
+
 fn main() -> std::io::Result<()> {
     let rules = BagRules::new("day7-input.txt")?;
 
     println!("Num containing colors for shiny gold: {}", rules.count_containing_colors("shiny gold"));
 
-    if let Some(count) = rules.get_min_children("shiny gold") {
-        println!("Fewest bags within shiny gold: {}", count);
-    }
+    println!("Fewest bags within shiny gold: {}", rules.get_min_children("shiny gold"));
 
     Ok(())
 }
@@ -137,47 +137,52 @@ impl BagRules {
         false
     }
 
-    fn get_min_children(&self, color_name : &str) -> Option<u32> {
+    fn get_min_children(&self, color_name : &str) -> u32 {
         if let Some(color_index) = self.find_color_index(color_name) {
             let mut visited = Vec::new();
             return self.get_min_children2(&mut visited, color_index);
         }
-        
-        None
+        else 
+        {
+            return 0;            
+        }
     }
 
-    fn get_min_children2(&self, visited : &mut Vec<u32>, color_index : u32) -> Option<u32> {
+    fn get_min_children2(&self, visited : &mut Vec<u32>, color_index : u32) -> u32 {
         let bag = &self.colors[color_index as usize];
         if bag.first_child < 0
         {
-            return Some(0);
+            return 0;
         }
 
         visited.push(color_index);
 
-        let mut best = None;
+        let mut total_count = 0;
 
         // Iterate over the possible child bags.
         let mut node_index = bag.first_child;
-        while node_index >= 0 {
+        while node_index >= 0 && total_count < INFINITE_BAGS {
             let child = &self.list_nodes[node_index as usize];
 
-            // Make sure it's not a cycle.
-            if !visited.contains(&child.color_index) {
+            if visited.contains(&child.color_index) {
 
-                if let Some(count) = self.get_min_children2(visited, child.color_index) {
-                    // The full count is the child bag itself plus the contents of the child bag,
-                    // times the number of child bags.
-                    let full_count = (1 + count) * child.count;
+                // It's a cycle, so the count is infinite.
+                total_count = INFINITE_BAGS;
+            }
+            else {
 
-                    if let Some(best_count) = best {
-                        if full_count < best_count {
-                            best = Some(full_count);
-                        }
-                    }
-                    else {
-                        best = Some(full_count);
-                    }
+                // Recursively get the count of children within each child bag.
+                let count = self.get_min_children2(visited, child.color_index);
+                if count < INFINITE_BAGS {
+
+                    // Add the child bag itself plus its children, multiplied
+                    // by the number of child bags.
+                    total_count += (1 + count) * child.count;
+                }
+                else {
+
+                    // It's a cycle, so the count is infinite.
+                    total_count = INFINITE_BAGS;
                 }
             }
 
@@ -186,7 +191,6 @@ impl BagRules {
 
         visited.pop();
 
-        best
+        total_count
     }
 }
-
