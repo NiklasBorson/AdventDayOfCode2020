@@ -2,19 +2,9 @@ mod cpu;
 
 fn main() -> std::io::Result<()> {
     let mut computer = cpu::Computer::load_program("day8-input.txt")?;
-    check_for_loop(&mut computer);
-    Ok(())
-}
 
-fn check_for_loop(computer : &mut cpu::Computer) {
-    let mut visited = Vec::new();
-    visited.resize(computer.get_instruction_count(), false);
-
-    while computer.in_bounds() && !visited[computer.get_instruction_index()] {
-        visited[computer.get_instruction_index()] = true;
-        computer.step();
-    }
-
+    // Part 1
+    computer.run();
     if computer.in_bounds() {
         println!(
             "Infinite loop at {} with accumulator = {}",
@@ -22,4 +12,30 @@ fn check_for_loop(computer : &mut cpu::Computer) {
             computer.get_accumulator()
         );
     }
+
+    for index in 0..computer.get_instruction_count() {
+        let old_op = computer.get_op_code(index);
+        let new_op = match old_op {
+            cpu::OpCode::Acc => cpu::OpCode::Acc,   // unchanged
+            cpu::OpCode::Jmp => cpu::OpCode::Nop,
+            cpu::OpCode::Nop => cpu::OpCode::Jmp
+        };
+
+        if new_op != old_op {
+            computer.set_op_code(index, new_op);
+
+            computer.reset();
+            computer.run();
+
+            if computer.get_instruction_index() == computer.get_instruction_count() {
+                println!("Fixed program by changing instruction {}.", index);
+                println!("Final accumulator value = {}.", computer.get_accumulator());
+            }
+
+            computer.set_op_code(index, old_op);
+        }
+    }
+
+    Ok(())
 }
+

@@ -1,7 +1,7 @@
 use std::fs;
 use std::io::{prelude::*, BufReader};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum OpCode {
     Acc,
     Jmp,
@@ -20,7 +20,7 @@ impl OpCode {
 }
 
 #[derive(Copy, Clone)]
-pub struct Instruction {
+struct Instruction {
     pub op_code : OpCode,
     pub operand : i32
 }
@@ -82,5 +82,28 @@ impl Computer {
                 OpCode::Nop => 1
             };
         }
+    }
+
+    // Runs until the program loops or is out of bounds.
+    pub fn run(&mut self) {
+        let mut visited = Vec::new();
+        visited.resize(self.get_instruction_count(), false);
+        while self.in_bounds() && !visited[self.get_instruction_index()] {
+            visited[self.get_instruction_index()] = true;
+            self.step();
+        }
+    }
+
+    pub fn get_op_code(&self, index : usize) -> OpCode {
+        self.instructions[index].op_code
+    }
+
+    pub fn set_op_code(&mut self, index : usize, op_code : OpCode) {
+        self.instructions[index].op_code = op_code;
+    }
+
+    pub fn reset(&mut self) {
+        self.instruction_index = 0;
+        self.accumulator = 0;
     }
 }
