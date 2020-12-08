@@ -3,6 +3,22 @@ use std::io::{prelude::*, BufReader};
 
 const INVALID_INDEX : u32 = 0xFFFFFFFF;
 
+//
+// Internal representation
+//
+// RuleList is the top-level object and contains two vectors:
+//  * color_defs : Vec<ColorDef>
+//  * child_nodes : Vec<ChildNode>
+//
+// Each ColorDef comprises a name and a singly-linked list of ChildNode.
+// ChildNode elements are identified by zero-based index, with INVALID_INDEX
+// meaning none. A ColorDef contains the index of the first child node, and
+// each child node contains the index of the next child node for that color.
+//
+// Each ChildNode specifies one of the contents specified for a color, i.e.,
+// the child bag color and how many.
+//
+
 // Internal representation of a color definition.
 struct ColorDef {
     color_name : String,
