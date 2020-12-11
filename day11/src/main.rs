@@ -12,23 +12,28 @@ fn main() -> std::io::Result<()> {
 
     // Read the file into a vector of i32.
     let (input, width) = read_cells("day11-input.txt")?;
-    let height = input.len() / width;
 
-    // Allocate another vector to hold the next frame.
-    let mut v = input.clone();
-    let mut next = Vec::new();
-    next.resize(v.len(), Cell::Empty);
-
-    next_frame(&v, width, height, &mut next);
-
-    while next != v {
-        std::mem::swap(&mut v, &mut next);
-        next_frame(&v, width, height, &mut next);
-    }
-
-    println!("{} full cells", count_full_cells(&v));
+    println!("Pass 1 count = {}", run(&input, width, next_frame1));
+    println!("Pass 2 count = {}", run(&input, width, next_frame2));
 
     Ok(())
+}
+
+fn run<T>(input: &[Cell], width: usize, func: T) -> usize
+where T: Fn(&[Cell], usize, usize, &mut[Cell]) {
+    let height = input.len() / width;
+    let mut current = Vec::from(input);
+    let mut next = current.clone();
+
+    // Compute the initial frame + 1.
+    func(&current, width, height, &mut next);
+
+    while next != current {
+        std::mem::swap(&mut current, &mut next);
+        func(&current, width, height, &mut next);
+    }
+
+    count_full_cells(&current)    
 }
 
 fn count_full_cells(v : &[Cell]) -> usize {
@@ -37,7 +42,7 @@ fn count_full_cells(v : &[Cell]) -> usize {
         .count()
 }
 
-fn next_frame(v : &[Cell], width : usize, height : usize, next : &mut[Cell]) {
+fn next_frame1(v : &[Cell], width : usize, height : usize, next : &mut[Cell]) {
     assert_eq!(width * height, v.len());
     for y in 0..height {
         // Array index at start of this row.
@@ -77,6 +82,52 @@ fn next_frame(v : &[Cell], width : usize, height : usize, next : &mut[Cell]) {
                 Cell::Space => Cell::Space,
                 Cell::Empty => if count == 0 { Cell::Full } else { Cell::Empty },
                 Cell::Full => if count < 5 { Cell::Full } else { Cell::Empty }
+            };
+        }
+    }
+}
+
+fn get_cell_index(width : usize, x : isize, y : isize) -> usize {
+    (y as usize) * width + (x as usize)
+}
+
+fn next_frame2(v : &[Cell], width : usize, height : usize, next : &mut[Cell]) {
+    assert_eq!(width * height, v.len());
+
+    // Define 2D vectors for each of the eight directions.
+    let vecs = [ 
+        (-1, -1), (0, -1), (1, -1),
+        (-1, 0), (1, 0),
+        (-1, 1), (0, 1), (1, 1)
+    ];
+
+    // Signed width and height.
+    let w = width as isize;
+    let h = height as isize;
+
+    // Iterate over all the cells by row and then by column.
+    for y in 0..h {
+        for x in 0..w {
+            let mut count = 0;
+            for &(dx, dy) in &vecs {
+                let mut x1 = x + dx;
+                let mut y1 = y + dy;
+                while x1 >= 0 && x1 < w && y1 >= 0 && y1 < h {
+                    let cell = v[get_cell_index(width, x1, y1)];
+                    if cell != Cell::Space {
+                        if cell == Cell::Full { count += 1; }
+                        break;
+                    }
+                    x1 += dx;
+                    y1 += dy;
+                }
+            }
+            let i = get_cell_index(width, x, y);
+
+            next[i] = match v[i] {
+                Cell::Space => Cell::Space,
+                Cell::Empty => if count == 0 { Cell::Full } else { Cell::Empty },
+                Cell::Full => if count < 4 { Cell::Full } else { Cell::Empty }
             };
         }
     }
