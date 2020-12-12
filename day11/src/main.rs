@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{prelude::*, BufReader};
+use std::io::{prelude::*, BufReader, BufWriter};
 
 #[derive(Clone, Copy, PartialEq)]
 enum Cell {
@@ -28,6 +28,7 @@ where T: Fn(&[Cell], usize, usize, &mut[Cell]) {
     // Compute the initial frame + 1.
     func(&current, width, height, &mut next);
 
+    // Calculate additional frames until we reach a steady state.
     while next != current {
         std::mem::swap(&mut current, &mut next);
         func(&current, width, height, &mut next);
@@ -115,19 +116,23 @@ fn next_frame2(v : &[Cell], width : usize, height : usize, next : &mut[Cell]) {
                 while x1 >= 0 && x1 < w && y1 >= 0 && y1 < h {
                     let cell = v[get_cell_index(width, x1, y1)];
                     if cell != Cell::Space {
-                        if cell == Cell::Full { count += 1; }
+                        if cell == Cell::Full {
+                            count += 1;
+                        }
                         break;
                     }
                     x1 += dx;
                     y1 += dy;
                 }
             }
-            let i = get_cell_index(width, x, y);
 
+            // Compute the new cell value from the old cell value and number of
+            // full neighbors.
+            let i = get_cell_index(width, x, y);
             next[i] = match v[i] {
                 Cell::Space => Cell::Space,
                 Cell::Empty => if count == 0 { Cell::Full } else { Cell::Empty },
-                Cell::Full => if count < 4 { Cell::Full } else { Cell::Empty }
+                Cell::Full => if count < 5 { Cell::Full } else { Cell::Empty }
             };
         }
     }
@@ -136,6 +141,34 @@ fn next_frame2(v : &[Cell], width : usize, height : usize, next : &mut[Cell]) {
 fn make_error(message: &str) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::Other, message)
 } 
+
+#[allow(dead_code)]
+fn save_frame(cells : &[Cell], width: usize, frame_index : i32)  -> std::io::Result<()> {
+    let path = format!("frame-{}.txt", frame_index);
+    let mut writer = BufWriter::new(fs::File::create(path)?);
+
+    let mut line = Vec::new();
+    line.resize(width + 1, 0u8);
+    line[width] = '\n' as u8;
+
+    let mut col_index = 0;
+
+    for cell in cells {
+        line[col_index] = match cell {
+            Cell::Space => '.' as u8,
+            Cell::Empty => 'L' as u8,
+            Cell::Full => '#' as u8
+        };
+
+        col_index += 1;
+        if col_index == width {
+            writer.write(&line)?;
+            col_index = 0;
+        }
+    }
+
+    Ok(())
+}
 
 fn read_cells(path: &str) -> std::io::Result<(Vec::<Cell>, usize)> {
     let mut v = Vec::new();
