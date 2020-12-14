@@ -1,23 +1,31 @@
 use std::fs;
-use std::io::{prelude::*, BufReader, BufWriter};
+use std::io::{prelude::*, BufReader};
+
+#[derive(Eq, PartialEq, Ord, PartialOrd)]
+struct Bus(/*p*/usize, /*i*/usize);
+
+impl Bus {
+    fn period(&self) -> usize { self.0 }
+    fn index(&self) -> usize { self.1 }
+}
 
 fn main() -> std::io::Result<()> {
     let (start_time, periods) = read_file("input.txt")?;
 
+    // Part 1
     find_best_period(start_time, &periods);
 
-    write_periods(&periods)?;
-
-    find_special_time(&periods)?;
+    // Part 2
+    find_special_time(&periods);
 
     Ok(())
 }
 
-fn find_best_period(start_time : usize, periods : &[(usize,usize)]) {
+fn find_best_period(start_time : usize, periods : &[Bus]) {
     let mut best_period = 0;
     let mut best_wait = usize::MAX;
 
-    for &(_i, p) in periods {
+    for &Bus(p, _i) in periods {
         let wait = compute_wait(start_time, p);
         if wait < best_wait {
             best_period = p;
@@ -30,183 +38,123 @@ fn find_best_period(start_time : usize, periods : &[(usize,usize)]) {
     println!("product = {}", best_period * best_wait);
 }
 
-fn write_periods(periods : &[(usize,usize)]) -> std::io::Result<()> {
-    let mut writer = BufWriter::new(fs::File::create("periods.txt")?);
-
-    for &(i, p) in periods {
-        let line = format!("{},{}\n", i, p);
-        writer.write(line.as_bytes())?;
+fn is_prime(n: usize) -> bool {
+    if (n & 1) == 0
+    {
+        return false;
     }
-
-    Ok(())
-}
-
-struct Bus {
-    i : usize,
-    p : usize,
-    n : usize,
-    t : usize    // (p * n) - i
-}
-
-impl Bus {
-    fn compute_nt(i : usize, p : usize, min_t : usize) -> (usize, usize) {
-        // Compute the smallest n such that (p * n) - i >= min_t.
-        //   p * n >= min_t + i
-        //   n >= (min_t + i) / p
-        let mut n = (min_t + i) / p;
-        
-        while p * n < min_t + i {
-            n += 1;
+    for i in (3..).step_by(2) {
+        if n % i == 0 {
+            return false;
         }
+        if i * i > n {
+            break;
+        }
+    }
+    true
+}
 
-        let t = (p * n) - i;
+struct Bus2 {
+    p : usize,
+    t : usize
+}
 
-        assert!(t >= min_t && t < min_t + p);
+impl Bus2 {
+    // Find the first matching time for this bus.
+    fn first_time(bus : & Bus) -> usize {
+        assert!(is_prime(bus.period()));
 
-        (n, t)
+        let p = bus.period() as isize;
+        let i = bus.index() as isize;
+
+        // Time t matches if the bus departs at (t + i) seconds. Bus departure 
+        // times are integer multiples of p, so matching times are:
+        // 
+        //      t = (p * N) - i
+        //      where N = any integer
+        //
+        // Compute t for N = 0.
+        let mut t = p - i;
+
+        // Find the first non-negative t.
+        while t < 0 { t += p; }
+
+        t as usize
     }
 
-    fn new(i : usize, p : usize) -> Bus {
-        let (n, t) = Bus::compute_nt(i, p, 0);
-        Bus { i : i, p : p, n : n, t : t }
+    fn new(bus : &Bus) -> Bus2 {
+        Bus2{ p : bus.period(), t : Bus2::first_time(bus) }
     }
 
-    fn next(&mut self, min_t : usize) -> usize {
-        let (n, t) = Bus::compute_nt(self.i, self.p, min_t);
-        self.n = n;
-        self.t = t;
-        t
+    fn match_time(&mut self, t : usize) -> bool {
+        assert!(self.t < t);
+        self.t += round_up_to_multiple(t - self.t, self.p);
+        self.t == t
     }
 }
 
-fn least_common_multiple(v : &[(usize,usize)]) -> usize {
-    let mut factors = factor(v[0].1);
+fn round_up_to_multiple(n : usize, k : usize) -> usize {
+    let m = n % k;
+    if m > 0 { n - m + k } else { n - m }
+}
 
-    for &(_i, p) in &v[1..] {
-        factors = get_common_factors(&factors, &factor(p));
+fn find_special_time(periods : &[Bus]) {
+    if periods.is_empty() {
+        return;
     }
 
-    get_product(&factors)
-}
+    // Get the last bus, which has the longest period.
+    let last_index = periods.len() - 1;
+    let last = &periods[last_index];
 
-fn get_product(v : &[usize]) -> usize {
-    v.iter().fold(1, |accum,x| accum * x)
-}
+    // Create Bus2 objects for the other, faster buses.
+    let mut others = Vec::new();
+    for bus in &periods[..last_index] {
+        others.push(Bus2::new(bus));
+    }
 
-fn get_common_factors(a : &[usize], b : &[usize]) -> Vec::<usize> {
-    let mut v = Vec::new();
+    // The match time must be less than the product of all the
+    // periods because at that point we begin a new cycle where
+    // all the buses depart together, like at t = 0.
+    let &limit = &periods.iter()
+        .map(|bus| bus.period())
+        .fold(1, |accum,x| accum * x);
 
-    let mut i = 0;
-    let mut j = 0;
+    // Start at the first possible match for the slowest bus.
+    let mut t= Bus2::first_time(last);
+    while t < limit {
+        let mut step = last.period();
+        let mut all_match = true;
 
-    while i < a.len() && j < b.len() {
-        let an = a[i];
-        let bn = b[j];
-        if an <= bn {
-            v.push(an);
-            i += 1;
-            if an == bn {
-                j += 1;
+        // Iterate over the faster buses.
+        for bus in &mut others {
+            if !bus.match_time(t) {
+
+                // Time t is not a match for bus.
+                all_match = false;
+            }
+            else {
+
+                // If two or more buses match at time t then the smallest possible
+                // interval to the next match is the product of their periods.
+                step *= bus.p;
             }
         }
-        else {
-            v.push(bn);
-            j += 1;
-        }
-    }
 
-    if i < a.len() {
-        v.extend_from_slice(&a[i..]);
-    }
-
-    if j < b.len() {
-        v.extend_from_slice(&b[j..]);
-    }
-
-    v
-}
-
-fn factor(mut n : usize) -> Vec::<usize> {
-    let mut v = Vec::new();
-
-    while (n & 1) == 0 {
-        v.push(2);
-        n >>= 1;
-    }
-
-    for f in (3..).step_by(2) {
-        if f * f > n {
+        if all_match {
+            println!("Matching time is {}.", t);
             break;
         }
 
-        while (n % f) == 0 {
-            v.push(f);
-            n /= f;
-        }
+        t += step;
     }
-
-    if n > 1 {
-        v.push(n);
-    }
-
-    v
-}
-
-fn find_special_time(periods : &[(usize,usize)]) -> std::io::Result<()> {
-    let lcm = least_common_multiple(&periods);
-    println!("least common multiple = {}", lcm);
-
-    let mut v = Vec::new();
-    for &(i, p) in periods {
-        v.push(Bus::new(i, p));
-    }
-
-    let mut writer = BufWriter::new(fs::File::create("times.csv")?);
-
-    loop {
-        // Compute the minimum and maximum t for all the buses.
-        let mut min_t = v.iter()
-            .map(|bus| bus.t)
-            .fold(usize::MAX, |accum,x| std::cmp::min(accum, x));
-
-        let mut max_t = v.iter()
-            .map(|bus| bus.t)
-            .fold(0, |accum,x| std::cmp::max(accum, x));
-        
-        for bus in &v {
-            if bus.t < min_t { min_t = bus.t; }
-            if bus.t > max_t { max_t = bus.t; }
-
-            let field = format!("{} * {} - {} = {},", bus.p, bus.n, bus.i, bus.t);
-            writer.write(field.as_bytes())?;
-        }
-        let newline = [10];
-        writer.write(&newline)?;
-
-        // If all the times are the same then we're done.
-        if min_t == max_t {
-            println!("The magic time is {}", min_t);
-            break;            
-        }
-
-        for bus in &mut v {
-            max_t = bus.next(max_t);
-        }
-
-        if max_t >= lcm {
-            break;
-        }
-    }
-
-    Ok(())
 }
 
 fn compute_wait(start_time : usize, p : usize) -> usize {
     p - (start_time % p)
 }
 
-
-fn read_file(path: &str) -> std::io::Result<(usize,Vec::<(usize,usize)>)> {
+fn read_file(path: &str) -> std::io::Result<(usize,Vec::<Bus>)> {
     let mut start_time = 0;
     let mut periods = Vec::new();
     let mut lines = BufReader::new(fs::File::open(path)?).lines();
@@ -222,12 +170,14 @@ fn read_file(path: &str) -> std::io::Result<(usize,Vec::<(usize,usize)>)> {
         let s = line?;
         let mut i = 0;
         for field in s.split(',') {
-            if let Ok(n) = field.parse::<usize>() {
-                periods.push((i,n));
+            if let Ok(p) = field.parse::<usize>() {
+                periods.push(Bus(p, i));
             }
             i += 1;
         }
     }
+
+    periods.sort_unstable();
 
     Ok((start_time, periods))
 }
