@@ -27,8 +27,8 @@ fn part1(code : &[Instruction]) {
 
 enum Instruction {
     Mask {
-        and : u64,
-        or : u64
+        zero_bits : u64,
+        one_bits : u64
     },
     Mem {
         address : u64,
@@ -37,28 +37,28 @@ enum Instruction {
 }
 
 struct Computer {
-    mask_and : u64,
-    mask_or : u64,
+    zero_bits : u64,
+    one_bits : u64,
     memory : HashMap<u64, u64>
 }
 
 impl Computer {
     fn new() -> Computer {
         Computer{
-            mask_and : u64::MAX,
-            mask_or : 0,
+            zero_bits : u64::MAX,
+            one_bits : 0,
             memory : HashMap::new()
         }
     }
 
     fn exec(&mut self, inst : &Instruction) {
         match inst {
-            Instruction::Mask{ and, or } => {
-                self.mask_and = *and;
-                self.mask_or = *or;
+            Instruction::Mask{ zero_bits, one_bits } => {
+                self.zero_bits = *zero_bits;
+                self.one_bits = *one_bits;
             },
             Instruction::Mem{ address, value} => {
-                let val = (*value & self.mask_and) | self.mask_or;
+                let val = (*value & !self.zero_bits) | self.one_bits;
                 self.memory.insert(*address, val);
             }
         }
@@ -71,31 +71,22 @@ fn parse_instruction(line : &str) -> Option<Instruction> {
     const MEM2 : &str = "] = ";
 
     if line.len() >= MASK.len() && &line[..MASK.len()] == MASK {
-        let mut and = 0;
-        let mut or = 0;
+        let mut zero_bits = 0;
+        let mut one_bits = 0;
         for ch in line[MASK.len()..].chars() {
+            zero_bits <<= 1;
+            one_bits <<= 1;
             match ch {
-                'X' => {
-                    and <<= 1;
-                    or <<= 1;
-                    and |= 1;   // keep the input bit
-                },
-                '0' => {
-                    and <<= 1;
-                    or <<= 1;
-                },
-                '1' => {
-                    and <<= 1;
-                    or <<= 1;
-                    or |= 1;
-                },
+                'X' => {},
+                '0' => { zero_bits |= 1; },
+                '1' => { one_bits |= 1; },
                 _ => {
                     println!("Invalid mask: {}", line);
                     return None;
                 }
             }
         }
-        return Some(Instruction::Mask{ and, or });
+        return Some(Instruction::Mask{ zero_bits, one_bits });
     }
     else if line.len() >= MEM1.len() && &line[..MEM1.len()] == MEM1 {
         if let Some(i) = line.find(MEM2) {
