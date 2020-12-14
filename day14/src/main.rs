@@ -5,16 +5,20 @@ use std::collections::HashMap;
 fn main() -> std::io::Result<()> {
     let code = read_file("input.txt")?;
 
-    part1(&code);
+    // Part 1
+    //exec(&code, false);
+
+    // Part 2
+    exec(&code, true);
 
     Ok(())
 }
 
-fn part1(code : &[Instruction]) {
+fn exec(code : &[Instruction], is_v2 : bool) {
     let mut computer = Computer::new();
 
     for inst in code {
-        computer.exec(inst);
+        computer.exec(inst, is_v2);
     }
 
     let mut sum = 0;
@@ -51,18 +55,59 @@ impl Computer {
         }
     }
 
-    fn exec(&mut self, inst : &Instruction) {
+    fn exec(&mut self, inst : &Instruction, is_v2 : bool) {
         match inst {
             Instruction::Mask{ zero_bits, one_bits } => {
                 self.zero_bits = *zero_bits;
                 self.one_bits = *one_bits;
             },
             Instruction::Mem{ address, value} => {
-                let val = (*value & !self.zero_bits) | self.one_bits;
-                self.memory.insert(*address, val);
+                if is_v2 {
+                    self.set_mem2(*address, *value);
+                }
+                else {
+                    self.set_mem1(*address, *value);
+                }
             }
         }
     }
+
+    fn set_mem1(&mut self, address : u64, value : u64) {
+        let val = (value & !self.zero_bits) | self.one_bits;
+        self.memory.insert(address, val);
+    }
+
+    fn set_mem2(&mut self, address : u64, value : u64) {
+        const BITMASK : u64 = (1 << 36) - 1;
+        let addr = address | self.one_bits;
+        let floating = !(self.one_bits | self.zero_bits) & BITMASK;
+        if floating == 0 {
+            self.memory.insert(addr, value);
+        }
+        else {
+            let mut bit_indices = [0u8; 64];
+            let mut bit_count = 0;
+            for i in 0..64 {
+                if test_bit(floating, i) {
+                    bit_indices[bit_count as usize] = i;
+                    bit_count += 1;
+                }
+            }
+            for combo in 0..(1u64 << bit_count) {
+                let mut flipped = 0;
+                for i in 0..bit_count {
+                    if test_bit(combo, i) {
+                        flipped |= 1u64 << bit_indices[i as usize];
+                    }
+                }
+                self.memory.insert(addr ^ flipped, value);
+            }
+        }
+    }
+}
+
+fn test_bit(bits : u64, index : u8) -> bool {
+    ((bits >> index) & 1) != 0
 }
 
 fn parse_instruction(line : &str) -> Option<Instruction> {
