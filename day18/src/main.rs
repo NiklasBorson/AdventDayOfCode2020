@@ -4,21 +4,29 @@ use std::io::{prelude::*, BufReader};
 fn main() -> std::io::Result<()> {
     let input = read_file("input.txt")?;
 
-    let mut total = 0;
+    if let Some(total) = get_total(&input, false) {
+        println!("Part 1 total = {}", total);
+    }
 
-    for line in &input {
-        if let Some(n) = eval(&line) {
+    if let Some(total) = get_total(&input, true) {
+        println!("Part 2 total = {}", total);
+    }
+
+    Ok(())
+}
+
+fn get_total(input : &[String], use_precedence : bool) -> Option<u64> {
+    let mut total = 0;
+    for line in input {
+        if let Some(n) = eval(&line, use_precedence) {
             total += n;
         }
         else {
             println!("Error evaluating expression: {}", &line);
-            break;
+            return None;
         }
     }
-
-    println!("total = {}", total);
-
-    Ok(())
+    Some(total)
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -50,12 +58,13 @@ use Token::Open;
 use Token::Close;
 
 struct Stack {
-    stack : Vec<Token>
+    stack : Vec<Token>,
+    use_precedence : bool
 }
 
 impl Stack {
-    fn new() -> Stack {
-        Stack{ stack : Vec::new() }
+    fn new(use_precedence : bool) -> Stack {
+        Stack{ stack : Vec::new(), use_precedence }
     }
 
     fn frame(&self, index : usize) -> Token {
@@ -134,37 +143,8 @@ impl Stack {
     }
 }
 
-fn eval(expr : &str) -> Option<u64> {
-
-    //let mut iter = expr.chars();
-
-    //      9 + 3 * (9 * (9 + 3 + 5 * 3) * 5 * 3 * 5)
-    //
-    //      "9"  push Number                   9
-    //      "+"  push Operator                    9 +
-    //      "3"  pop [+ 9], push 12         12
-    //      "*"  push Mul                   12 * 
-    //      "("  push Group                 12 * G
-    //      "9"  push Number                   12 * G 9
-    //      "*"  push Operator                    12 * G 9 *
-    //      "("  push Group                 12 * G 9 * G
-    //      "9"  push Number                   12 * G 9 * G 9
-    //      "+"  push Operator                    12 * G 9 * G 9 +
-    //      "3"  pop [+ 9], push 12         12 * G 9 * G 12
-    //      "+"  push Operator                    12 * G 9 * G 12 +
-    //      "5"  pop [+ 12], push 17        12 * G 9 * G 17
-    //      "*"  push Operator                    12 * G 9 * G 17 *
-    //      "3"  pop [* 17], push 51        12 * G 9 * G 51
-    //      ")"  pop 
-    //      "*"
-    //      "5"
-    //      "*"
-    //      "3"
-    //      "*"
-    //      "5"
-    //
-    
-    let mut stack = Stack::new();
+fn eval(expr : &str, use_precedence : bool) -> Option<u64> {
+    let mut stack = Stack::new(use_precedence);
 
     for ch in expr.chars() {
         match ch {
