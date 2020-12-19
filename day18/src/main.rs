@@ -86,6 +86,9 @@ impl Stack {
     }
 
     fn push_op(&mut self, op : OpType) {
+        if self.use_precedence && op == Mul {
+            self.reduce_all();
+        }
         self.stack.push(Operator(op));
     }
 
@@ -98,7 +101,7 @@ impl Stack {
     }
 
     fn result(&mut self) -> Option<u64> {
-        self.reduce();
+        self.reduce_all();
         if self.stack.len() == 1 {
             if let Number(n) = self.stack[0] {
                 return Some(n);
@@ -132,6 +135,7 @@ impl Stack {
     }
 
     fn close_group(&mut self) -> Option<()> {
+        self.reduce_all();
         if let Number(value) = self.top() {
             if self.frame(1) == Open {
                 self.pop(2);
@@ -142,9 +146,21 @@ impl Stack {
         None
     }
 
+    fn reduce_all(&mut self) -> Option<()> {
+        self.reduce_impl(true)
+    }
+
     fn reduce(&mut self) -> Option<()> {
+        self.reduce_impl(!self.use_precedence)
+    }
+
+    fn reduce_impl(&mut self, force : bool) -> Option<()> {
         while let Number(rhs) = self.top() {
             if let Operator(op) = self.frame(1) {
+                if !force && op == Mul {
+                    break;
+                }
+
                 if let Number(lhs) = self.frame(2) {
                     self.pop(3);
                     self.push_number(op.eval(lhs, rhs));
