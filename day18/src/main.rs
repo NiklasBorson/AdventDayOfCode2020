@@ -81,7 +81,24 @@ impl Stack {
         self.frame(0)
     }
 
-    fn result(&self) -> Option<u64> {
+    fn push_number(&mut self, value : u64) {
+        self.stack.push(Number(value));
+    }
+
+    fn push_op(&mut self, op : OpType) {
+        self.stack.push(Operator(op));
+    }
+
+    fn push_group(&mut self) {
+        self.stack.push(Open);
+    }
+
+    fn pop(&mut self, count : usize) {
+        self.stack.resize(self.stack.len() - count, Token::None);
+    }
+
+    fn result(&mut self) -> Option<u64> {
+        self.reduce();
         if self.stack.len() == 1 {
             if let Number(n) = self.stack[0] {
                 return Some(n);
@@ -94,52 +111,54 @@ impl Stack {
         match tok {
             Token::None =>
                 None,
-            Operator(_op) => {
-                self.stack.push(tok);
+            Operator(op) => {
+                self.push_op(op);
                 Some(())
             },
             Number(value) => {
-                let value = self.reduce(value)?;
-                self.stack.push(Token::Number(value));
+                self.push_number(value);
+                self.reduce()?;
                 Some(())
             }
             Open => {
-                self.stack.push(tok);
+                self.push_group();
                 Some(())
             }
             Close => {
-                let value = self.close_group()?;
-                let value = self.reduce(value)?;
-                self.stack.push(Token::Number(value));
+                self.close_group()?;
                 Some(())
             }
         }
     }
 
-    fn close_group(&mut self) -> Option<u64> {
+    fn close_group(&mut self) -> Option<()> {
         if let Number(value) = self.top() {
-            self.stack.pop();
-            if self.top() == Open {
-                self.stack.pop();
-                return Some(value);
+            if self.frame(1) == Open {
+                self.pop(2);
+                self.push_number(value);
+                return self.reduce();
             }
         }
         None
     }
 
-    fn reduce(&mut self, value : u64) -> Option<u64> {
-        let mut rhs = value;
-        while let Operator(op) = self.top() {
-            self.stack.pop();
-            if let Number(lhs) = self.top() {
-                rhs = op.eval(lhs, rhs);
-                self.stack.pop();
+    fn reduce(&mut self) -> Option<()> {
+        while let Number(rhs) = self.top() {
+            if let Operator(op) = self.frame(1) {
+                if let Number(lhs) = self.frame(2) {
+                    self.pop(3);
+                    self.push_number(op.eval(lhs, rhs));
+                }
+                else {
+                    // Error: no left operand.
+                    return None;
+                }
             }
             else {
-                return None;
+                break;
             }
         }
-        Some(rhs)
+        Some(())
     }
 }
 
