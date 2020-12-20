@@ -88,9 +88,9 @@ pub fn read_file(path: &str) -> std::io::Result<(Vec<Rule>, Vec::<String>)> {
             in_grammar = false;
         }
         else if in_grammar {
-            if grammar.add_rule(&s) == None {
-                return Err(make_error(&format!("Invalid rule: {}", &s)));
-            }
+            grammar.add_rule(&s).ok_or(
+                make_error(&format!("Invalid rule: {}", &s))
+            )?;
         }
         else {
             input.push(s);

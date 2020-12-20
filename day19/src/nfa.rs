@@ -1,5 +1,7 @@
 use super::grammar::*;
 use Rule::*;
+use std::fs;
+use std::io::{prelude::*, BufWriter};
 
 const START_STATE : usize = 0;
 const END_STATE : usize = 1;
@@ -63,6 +65,20 @@ impl Nfa{
 
         // Add a transition from the last element's final state to the final state of the sequence.
         self.add_transition(last_state, Token::Nil, final_state);
+    }
+
+    pub fn write_transitions(&self, path : &str) -> std::io::Result<()> {
+        let mut writer = BufWriter::new(fs::File::create(path)?);
+        for &(from, token, to) in &self.transitions {
+            let line = format!(
+                "{}, {}, {}\n",
+                from,
+                match token { Token::A => "a", Token::B => "b", _ => "" },
+                to
+            );
+            writer.write(line.as_bytes())?;
+        }
+        Ok(())
     }
 
     pub fn is_match(&self, input : &str) -> bool {
