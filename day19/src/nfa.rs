@@ -9,62 +9,84 @@ const END_STATE : usize = 1;
 pub struct Nfa{
     pub state_count : usize,
     pub transitions : Vec<(usize, Token, usize)>,
+    pub transition_ranges : Vec<(usize, usize)>
 }
 
 impl Nfa{
     pub fn new(rules : &[Rule]) -> Nfa {
 
-        // Create an NFA with two states for each rule:
-        //  - initial state at rule_index * 2
-        //  - final state at rule_index * 2 + 1
-        let mut nda = Nfa{
-            state_count : rules.len() * 2,
-            transitions : Vec::new()
+        // Initialize the NFA with no transitions and two states:
+        // START_STATE (0) and END_STATE (1).
+        let mut nfa = Nfa{
+            state_count : 2,
+            transitions : Vec::new(),
+            transition_ranges : Vec::new()
         };
 
-        // Add state transitions for each rule.
-        for rule_num in 0..rules.len() {
-            let initial_state = rule_num * 2;
-            let final_state = initial_state + 1;
+        // Recursively add states and transitions starting with rule 0.
+        let end_state = nfa.add_states(rules, 0, START_STATE);
 
-            match &rules[rule_num] {
-                Void => {
-                },
-                Terminal(token) => {
-                    nda.add_transition(initial_state, *token, final_state);
-                },
-                Sequence(v) => {
-                    nda.add_sequence(initial_state, final_state, &v);
-                },
-                Choice(a, b) => {
-                    nda.add_sequence(initial_state, final_state, &a);
-                    nda.add_sequence(initial_state, final_state, &b);
-                }
+        // Add a transition from the final state of the rule 0 production to END_STATE.
+        nfa.add_transition(end_state, Token::Nil, END_STATE);
+
+        // Sort and optimize the transitions.
+        nfa.finalize();
+
+        nfa
+    }
+
+    fn add_states(&mut self, rules : &[Rule], rule_index : usize, prev_state : usize) -> usize {
+        match &rules[rule_index] {
+            Void => {
+                prev_state
+            },
+            Terminal(token) => {
+                // Add a new state.
+                let new_state = self.state_count;
+                self.state_count += 1;
+
+                // Add a transition from prev_state to the new state.
+                self.add_transition(prev_state, *token, new_state);
+
+                // The new state is the end state of this production.
+                new_state
+            },
+            Sequence(v) => {
+                // Add states for a sequence, and return the end state of
+                // the sequence.
+                self.add_sequence(rules, &v, prev_state)
+            },
+            Choice(a, b) => {
+                // Add states for each of the alternate sequences.
+                // The previous state will have transitions to the start states
+                // of both sequences, making this an NFA rather than a DFA.
+                let end1 = self.add_sequence(rules, &a, prev_state);
+                let end2 = self.add_sequence(rules, &b, prev_state);
+
+                // Add final state for the choice.
+                let new_state = self.state_count;
+                self.state_count += 1;
+
+                // Add transitions from each sequence's end state to the end state
+                // for the choice. 
+                self.add_transition(end1, Token::Nil, new_state);
+                self.add_transition(end2, Token::Nil, new_state);
+
+                new_state
             }
         }
-
-        nda.transitions.sort_unstable();
-
-        nda
     }
 
     fn add_transition(&mut self, from : usize, token : Token, to : usize) {
         self.transitions.push(( from, token, to ));
     }
 
-    fn add_sequence(&mut self, initial_state : usize, final_state : usize, sequence : &[usize]) {
-        let mut last_state = initial_state;
-        for &rule_num in sequence {
-            // Add a transition from the last state to the rule's initial state.
-            let rule_initial_state = rule_num * 2;
-            self.add_transition(last_state, Token::Nil, rule_initial_state);
-
-            // We will transition from the rule's final state to whatever is next.
-            last_state = rule_initial_state + 1;
+    fn add_sequence(&mut self, rules : &[Rule], rule_indices : &[usize], prev_state : usize) -> usize {
+        let mut last_state = prev_state;
+        for &rule_index in rule_indices {
+            last_state = self.add_states(rules, rule_index, last_state);
         }
-
-        // Add a transition from the last element's final state to the final state of the sequence.
-        self.add_transition(last_state, Token::Nil, final_state);
+        last_state
     }
 
     pub fn write_transitions(&self, path : &str) -> std::io::Result<()> {
@@ -79,6 +101,38 @@ impl Nfa{
             writer.write(line.as_bytes())?;
         }
         Ok(())
+    }
+
+    fn finalize(&mut self) {
+        // Resize transition_ranges to match the number of states.
+        self.transition_ranges.resize(self.state_count, (0, 0));
+
+        // Sort the transitions, so they're grouped by "from" state (the first field).
+        self.transitions.sort_unstable();
+
+        // Initialize the current range-start and state index.
+        let mut current_range_start = 0;
+        let mut current_state = self.transitions[0].0;
+
+        // Iterate over all the transitions.
+        for i in 1..self.transitions.len() {
+
+            // If it's a new state, save the range of transition indices for the previous state.
+            let state = self.transitions[i].0;
+            if state != current_state {
+                self.transition_ranges[current_state] = (current_range_start, i);
+                current_range_start = i;
+                current_state = state;
+            }
+        }
+
+        // Save the range of transition indices for the last state.
+        self.transition_ranges[current_state] = (current_range_start, self.transitions.len());
+    }
+
+    fn find_transitions(&self, state_index : usize) -> &[(usize, Token, usize)] {
+        let (begin, end) = self.transition_ranges[state_index];
+        &self.transitions[begin..end]
     }
 
     pub fn is_match(&self, input : &str) -> bool {
@@ -120,34 +174,6 @@ impl Nfa{
             }
         }
         false
-    }
-
-    fn find_transitions(&self, state_index : usize) -> &[(usize, Token, usize)] {
-        let v = &self.transitions[..];
-        let mut begin = 0;
-        let mut end = v.len();
-        while begin < end {
-            let i = (begin + end) / 2;
-            let n = v[i].0;            
-            if state_index > n {
-                begin = i + 1;
-            }
-            else if state_index < n {
-                end = i;
-            }
-            else {
-                begin = i;
-                while begin > 0 && v[begin - 1].0 == state_index {
-                    begin -= 1;
-                }
-                end = i + 1;
-                while end < v.len() && v[end].0 == state_index {
-                    end += 1;
-                }
-                break;
-            }
-        }
-        &v[begin..end]
     }
 }
 
